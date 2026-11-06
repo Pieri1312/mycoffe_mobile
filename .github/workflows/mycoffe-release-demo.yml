@@ -1,0 +1,70 @@
+name: Publicar APK de demonstração
+
+on:
+  push:
+    branches:
+      - release/android-demo-v1
+    paths:
+      - '.github/workflows/mycoffe-release-demo.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android project
+        run: dart tool/setup.dart
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze
+      - name: Run tests
+        run: flutter test
+      - name: Build demonstration APK
+        run: flutter build apk --debug
+      - name: Upload demonstration APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyCoffe-Android-demo
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: MyCoffe-Android-demo
+          path: dist
+      - name: Publicar APK na release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: 92d898adde21d35d2ae1bad377bc3a377eabf6a6
+        run: |
+          mv dist/app-debug.apk dist/MyCoffe-Android-demo.apk
+          gh release create v1.0.0-demo dist/MyCoffe-Android-demo.apk \
+            --repo "$GH_REPO" --target "$SOURCE_SHA" \
+            --title "MyCoffe Android 1.0.0 Demo" --prerelease \
+            --notes "APK Android para demonstração do catálogo, carrinho e checkout. Os pedidos neste APK são simulados."
